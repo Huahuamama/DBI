@@ -1,4 +1,4 @@
-#Faktorian Solution for DragonBones
+#V1.00
 
 @tool
 extends Node2D
@@ -224,6 +224,8 @@ func dbimport(val):
 
 					if json_result.armature[i].bone[b].has("length"):
 						bone.set_length(json_result.armature[i].bone[b].length)
+					else:
+						bone.set("editor_settings/show_bone_gizmo",false)
 					bone.owner = get_tree().edited_scene_root
 
 				else:
@@ -261,7 +263,7 @@ func dbimport(val):
 
 		if json_result.armature[i].has("slot"):
 			var masterslot = Node2D.new()
-			var slotscript = load("res://slots.gd")
+			var slotscript = load("res://addons/DBI/slots.gd")
 			masterslot.set_script(slotscript)
 			masterslot.set_name("SLOTS")
 
@@ -482,7 +484,7 @@ func dbimport(val):
 								display.owner = get_tree().edited_scene_root
 
 			var slots = masterslot.get_children();
-			slotscript = load("res://slot.gd")
+			slotscript = load("res://addons/DBI/slot.gd")
 			for sl in slots.size():
 				slots[sl].set_script(slotscript)
 				if json_result.armature[i].slot[sl].has("displayIndex"):
@@ -494,6 +496,8 @@ func dbimport(val):
 				rest.value_track_set_update_mode(track,Animation.UPDATE_DISCRETE)
 				rest.track_set_path(track, String(skeleton.get_path_to(slots[sl]))+":current");
 				rest.track_insert_key(track, 0, slots[sl].current);
+#				slots[sl].set_script(null)
+#			masterslot.set_script(null)
 
 		if json_result.armature[i].has("ik"):
 			for ik in json_result.armature[i].ik.size():
@@ -617,7 +621,6 @@ func dbimport(val):
 
 						offset = 0;
 						for f in json_result.armature[i].animation[an].bone[bi].rotateFrame.size():
-							print(231)
 							if json_result.armature[i].animation[an].bone[bi].rotateFrame[f].has("curve"):
 								offset+=curvature(animation,track_rot_index,f+offset,json_result.armature[i].animation[an].bone[bi].rotateFrame[f].curve);
 
@@ -652,7 +655,10 @@ func dbimport(val):
 								newScale.y = json_result.armature[i].animation[an].bone[bi].scaleFrame[f].y
 							animation.bezier_track_insert_key(track_scale_x_index, write_head, newScale.x)
 							animation.bezier_track_insert_key(track_scale_y_index, write_head, newScale.y)
-							write_head+=json_result.armature[i].animation[an].bone[bi].scaleFrame[f].duration*framerate
+							var d = json_result.armature[i].animation[an].bone[bi].scaleFrame[f].get("duration")
+							if d==null:
+								d = 1
+							write_head+=d*framerate
 
 						var offset = 0;
 						for f in json_result.armature[i].animation[an].bone[bi].scaleFrame.size():
@@ -675,7 +681,7 @@ func dbimport(val):
 					if f_name.rfind("/")!=-1:
 						f_name = f_name.substr(f_name.rfind("/")+1)
 
-					skeleton.find_child("SLOTS",false).find_child(json_result.armature[i].animation[an].ffd[ffdi].slot,false).find_child(f_name).set_script(load("res://PolyEaseCurve.gd"))
+					skeleton.find_child("SLOTS",false).find_child(json_result.armature[i].animation[an].ffd[ffdi].slot,false).find_child(f_name).set_script(load("res://addons/DBI/PolyEaseCurve.gd"))
 
 					var path = String(skeleton.get_path_to(skeleton.find_child("SLOTS",false).find_child(json_result.armature[i].animation[an].ffd[ffdi].slot,false).find_child(f_name)))
 					animation.track_set_path(track_ffd_index, path+":delta");
@@ -720,16 +726,17 @@ func dbimport(val):
 
 							frames.push_back(write_head)
 							frames.push_back(keyframe)
-
 							write_head+=json_result.armature[i].animation[an].ffd[ffdi].frame[f].duration*framerate
-						print(frames.size());
+						
+						#print(frames);  #111
 						for f in range(0,frames.size(),2):
 							if(f!=0):
-								animation.bezier_track_insert_key(track_ffd_index, frames[f]+0.0001, 0);
+								if(f+3<frames.size()):
+									animation.bezier_track_insert_key(track_ffd_index, frames[f]+0.0001, 0);
 							else:
-								animation.bezier_track_insert_key(track_ffd_index, frames[f], 0);
+								animation.bezier_track_insert_key(track_ffd_index, frames[f], 0);			
 
-							if(f+3<frames.size()):
+							if(f+3<frames.size()): #if is not the last key frame,add 1 for next key
 								animation.bezier_track_insert_key(track_ffd_index, frames[f+2], 1);
 								if(f>0):
 									animation.track_insert_key(track_start, frames[f]+0.0001, frames[f+1])
