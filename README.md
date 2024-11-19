@@ -1,6 +1,6 @@
 # DBI
 Import Dragonbones file to Godot as skeletal animation.
-Version: DragonBones 5.5; Godot 4.
+Version: DragonBones 5.6; Godot 4.
 
 # Install:
 1) Copy all files to res://addons/
