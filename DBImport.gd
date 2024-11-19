@@ -102,6 +102,8 @@ func dbimport(val):
 
 		var rest = Animation.new()
 		rest.set_length(0);
+		
+		var boneArray: Array[Bone2D] = []
 
 		if json_result.armature[i].has("bone"):
 			for b in json_result.armature[i].bone.size():
@@ -121,6 +123,7 @@ func dbimport(val):
 						if json_result.armature[i].bone[b].transform.has("scY"):
 							b_scale.y = json_result.armature[i].bone[b].transform.scX;
 
+					# When a bone does not inherit parent's transform, use RemoteTransform2D
 					if json_result.armature[i].bone[b].has("inheritRotation") || json_result.armature[i].bone[b].has("inheritScale"):
 
 						par.get_parent().add_child(bone);
@@ -181,8 +184,12 @@ func dbimport(val):
 
 						track = rest.add_track(Animation.TYPE_VALUE)
 						rest.value_track_set_update_mode(track,Animation.UPDATE_DISCRETE)
-						rest.track_set_path(track, String(skeleton.get_path_to(target))+":rotation_degrees");
-						rest.track_insert_key(track, 0, target.rotation_degrees);
+						if json_result.armature[i].bone[b].has("inheritRotation") && json_result.armature[i].bone[b].inheritRotation==false:
+							rest.track_set_path(track, String(skeleton.get_path_to(bone))+":global_rotation_degrees");
+							rest.track_insert_key(track, 0, bone.global_rotation_degrees);
+						else:
+							rest.track_set_path(track, String(skeleton.get_path_to(target))+":rotation_degrees");
+							rest.track_insert_key(track, 0, target.rotation_degrees);
 
 						if json_result.armature[i].bone[b].has("inheritScale"):
 							if json_result.armature[i].bone[b].inheritScale==false:
@@ -260,6 +267,7 @@ func dbimport(val):
 					rest.track_insert_key(track, 0, bone.scale);
 
 				bone.rest=bone.transform
+				boneArray.append(bone)
 
 		if json_result.armature[i].has("slot"):
 			var masterslot = Node2D.new()
@@ -522,6 +530,10 @@ func dbimport(val):
 				skeleton.get_modification_stack().add_modification(TIK);
 				skeleton.get_modification_stack().set_enabled(true)
 
+		
+#		for b in boneArray:
+#			b.set_autocalculate_length_and_angle(true)
+
 		if not json_result.armature[i].has("animation"):
 			return
 		skeleton.add_child(AP)
@@ -590,9 +602,9 @@ func dbimport(val):
 							bone_rot = skeleton.find_child(json_result.armature[i].animation[an].bone[bi].name).rotation_degrees
 							path = String(skeleton.get_path_to(skeleton.find_child(json_result.armature[i].animation[an].bone[bi].name)))+":rotation_degrees"
 						else:
-							if not bone_ref.update_rotation:
-								bone_rot = skeleton.find_child(json_result.armature[i].animation[an].bone[bi].name).rotation_degrees
-								path = String(skeleton.get_path_to(skeleton.find_child(json_result.armature[i].animation[an].bone[bi].name)))+":rotation_degrees"
+							if not bone_ref.update_rotation:  #use global rotation
+								bone_rot = skeleton.find_child(json_result.armature[i].animation[an].bone[bi].name).global_rotation_degrees # + 90
+								path = String(skeleton.get_path_to(skeleton.find_child(json_result.armature[i].animation[an].bone[bi].name)))+":global_rotation_degrees"
 							else:
 								bone_rot = skeleton.find_child("[RE]"+json_result.armature[i].animation[an].bone[bi].name).rotation_degrees
 								path = String(skeleton.get_path_to(skeleton.find_child("[RE]"+json_result.armature[i].animation[an].bone[bi].name)))+":rotation_degrees"
