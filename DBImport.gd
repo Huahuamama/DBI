@@ -98,7 +98,7 @@ func dbimport(val):
 
 		var AP = AnimationPlayer.new()
 		AP.set_name("Animation")
-		AP.set_root(skeleton.get_path())
+		AP.set_root("..")
 
 		var rest = Animation.new()
 		rest.set_length(0);
@@ -136,7 +136,7 @@ func dbimport(val):
 						par.add_child(remote);
 						bone.set_name(json_result.armature[i].bone[b].name);
 						remote.set_name("[RE]"+bone.name)
-						remote.remote_path=bone.get_path()
+						remote.remote_path=remote.get_path_to(bone)  #bone.get_path()
 
 						if json_result.armature[i].bone[b].has("transform"):
 
@@ -487,7 +487,7 @@ func dbimport(val):
 									remote.set_name(display.name)
 									p_bone.add_child(remote);
 									remote.set_global_transform(display.get_global_transform());
-									remote.remote_path=display.get_path()
+									remote.remote_path=remote.get_path_to(display)
 									remote.owner = get_tree().edited_scene_root
 								display.owner = get_tree().edited_scene_root
 
