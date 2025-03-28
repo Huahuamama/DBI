@@ -584,7 +584,10 @@ func dbimport(val):
 								newPos.y+=json_result.armature[i].animation[an].bone[bi].translateFrame[f].y
 							animation.bezier_track_insert_key(track_pos_x_index, write_head, newPos.x)
 							animation.bezier_track_insert_key(track_pos_y_index, write_head, newPos.y)
-							write_head+=json_result.armature[i].animation[an].bone[bi].translateFrame[f].duration*framerate
+							if json_result.armature[i].animation[an].bone[bi].translateFrame[f].has("duration"):
+								write_head+=json_result.armature[i].animation[an].bone[bi].translateFrame[f].duration*framerate
+							else:
+								write_head+=framerate
 
 						var offset = 0;
 						for f in json_result.armature[i].animation[an].bone[bi].translateFrame.size():
@@ -629,7 +632,10 @@ func dbimport(val):
 							if  json_result.armature[i].animation[an].bone[bi].rotateFrame[f].has("clockwise"):
 								cwRot = 360*(json_result.armature[i].animation[an].bone[bi].rotateFrame[f].clockwise);
 							animation.bezier_track_insert_key(track_rot_index, write_head, newRot, Vector2(0,0), Vector2(0,0))
-							write_head+=json_result.armature[i].animation[an].bone[bi].rotateFrame[f].duration*framerate
+							if  json_result.armature[i].animation[an].bone[bi].rotateFrame[f].has("duration"):
+								write_head+=json_result.armature[i].animation[an].bone[bi].rotateFrame[f].duration*framerate
+							else:
+								write_head+= framerate
 
 						offset = 0;
 						for f in json_result.armature[i].animation[an].bone[bi].rotateFrame.size():
@@ -832,7 +838,10 @@ func dbimport(val):
 							if json_result.armature[i].animation[an].slot[sl].displayFrame[frame].has("value"):
 								value = json_result.armature[i].animation[an].slot[sl].displayFrame[frame].value
 							animation.track_insert_key(track_slot_index, write_head, value)
-							write_head+=json_result.armature[i].animation[an].slot[sl].displayFrame[frame].duration*framerate
+							if json_result.armature[i].animation[an].slot[sl].displayFrame[frame].has("duration"):
+								write_head+=json_result.armature[i].animation[an].slot[sl].displayFrame[frame].duration*framerate
+							else:
+								write_head += framerate
 
 			if json_result.armature[i].animation[an].has("zOrder"):
 				if json_result.armature[i].animation[an].zOrder.has("frame"):
