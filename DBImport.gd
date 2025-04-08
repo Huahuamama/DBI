@@ -7,53 +7,6 @@ extends Node2D
 @export_dir var textpath = "";
 @export var import : bool = false : set = dbimport
 
-func curvature(animation,track: int,start_f: int,curve: Array):
-	var finish_f = start_f+1;
-	var offset = 0;
-	var ta = animation.track_get_key_time(track,start_f)
-	var va = animation.bezier_track_get_key_value(track,start_f)
-	var tb = animation.track_get_key_time(track,start_f+1)
-	var vb = animation.bezier_track_get_key_value(track,start_f+1)
-
-#fix relativity
-
-	if curve.size()>4:
-		for c in range(2,curve.size()-2,6):
-			animation.bezier_track_insert_key(
-				track,
-				lerp(ta, tb, curve[c+2]),
-				lerp(va, vb, curve[c+3]),
-				Vector2(
-					lerp(ta, tb, curve[c+0])-lerp(ta, tb, curve[c+2]),
-					lerp(va, vb, curve[c+1])-lerp(va, vb, curve[c+3])
-				),
-				Vector2(
-					lerp(ta, tb, curve[c+4])-lerp(ta, tb, curve[c+2]),
-					lerp(va, vb, curve[c+5])-lerp(va, vb, curve[c+3])
-				)
-			);
-			finish_f += 1;
-			offset+=1
-
-	animation.bezier_track_set_key_out_handle(
-		track,
-		start_f,
-		Vector2(
-			lerp(ta,tb,curve[0])-ta,
-			lerp(va,vb,curve[1])-va
-		)
-	);
-	animation.bezier_track_set_key_in_handle(
-		track,
-		finish_f,
-		Vector2(
-			lerp(ta,tb,curve[curve.size()-2])-tb,
-			lerp(va,vb,curve[curve.size()-1])-vb
-		)
-	);
-	return offset;
-
-
 func set_texture(node, path = ""):
 	if path=="":
 		path=node.name
@@ -69,6 +22,42 @@ func set_texture(node, path = ""):
 			else:
 				node.set_texture(load(textpath+"/"+path.get_base_dir()+"/"+file))
 	dir.list_dir_end()
+
+
+func createAnimTrack(anim: Animation, path, firstFrame) -> int:
+	var track_index = anim.add_track(Animation.TYPE_VALUE);
+	anim.track_set_path(track_index, path)
+	
+	if firstFrame.has("tweenEasing") or firstFrame.has("curve"):
+		anim.value_track_set_update_mode(track_index, Animation.UPDATE_CONTINUOUS)
+	else:
+		anim.value_track_set_update_mode(track_index, Animation.UPDATE_DISCRETE)
+
+	return track_index;
+
+
+func addAnimKey(anim: Animation, trackIdx: int, frameJson, time:float, key: Variant):
+	var keyIndex = anim.track_insert_key(trackIdx, time, key);
+	
+	if frameJson.has("tweenEasing") or !frameJson.has("curve"):
+		pass
+	elif frameJson.has("curve"):
+		if arrayEqual(frameJson.curve, [0.5,0,1,1]):
+			anim.track_set_key_transition(trackIdx, keyIndex, 3);
+		elif arrayEqual(frameJson.curve, [0,0,0.5,1]):
+			anim.track_set_key_transition(trackIdx, keyIndex, 0.4);
+		elif arrayEqual(frameJson.curve, [0.5,0,0.5,1]):
+			anim.track_set_key_transition(trackIdx, keyIndex, -3);
+
+
+func arrayEqual(a: Array, b: Array):
+	if a.size() != b.size():
+		return false;
+	for i in a.size():
+		if a[i]!=b[i]:
+			return false;
+	return true;
+
 
 func dbimport(val):
 	if jsonpath == "" || textpath == "":
@@ -106,54 +95,55 @@ func dbimport(val):
 		var boneArray: Array[Bone2D] = []
 
 		if json_result.armature[i].has("bone"):
-			for b in json_result.armature[i].bone.size():
+			for b in json_result.armature[i].bone:
 				var bone = Bone2D.new();
 				bone.set_autocalculate_length_and_angle(false);
-				if json_result.armature[i].bone[b].has("parent"):
-					var par = skeleton.find_child(json_result.armature[i].bone[b].parent)
+				if b.has("parent"):
+					var par = skeleton.find_child(b.parent)
 					var pointB = Vector2(0,0);
 					var b_scale =  Vector2(1,1);
-					if json_result.armature[i].bone[b].has("transform"):
-						if json_result.armature[i].bone[b].transform.has('x'):
-							pointB.x= json_result.armature[i].bone[b].transform.x
-						if json_result.armature[i].bone[b].transform.has('y'):
-							pointB.y= json_result.armature[i].bone[b].transform.y
-						if json_result.armature[i].bone[b].transform.has("scX"):
-							b_scale.x = json_result.armature[i].bone[b].transform.scX;
-						if json_result.armature[i].bone[b].transform.has("scY"):
-							b_scale.y = json_result.armature[i].bone[b].transform.scX;
+					if b.has("transform"):
+						if b.transform.has('x'):
+							pointB.x= b.transform.x
+						if b.transform.has('y'):
+							pointB.y= b.transform.y
+						if b.transform.has("scX"):
+							b_scale.x = b.transform.scX;
+						if b.transform.has("scY"):
+							b_scale.y = b.transform.scX;
 
 					# When a bone does not inherit parent's transform, use RemoteTransform2D
-					if json_result.armature[i].bone[b].has("inheritRotation") || json_result.armature[i].bone[b].has("inheritScale"):
+					# not used for now
+					if b.has("inheritRotation") || b.has("inheritScale"):
 
 						par.get_parent().add_child(bone);
 						var remote = RemoteTransform2D.new()
 						remote.set_global_transform(bone.get_global_transform());
-						if json_result.armature[i].bone[b].has("inheritRotation"):
-							remote.set_update_rotation(json_result.armature[i].bone[b].inheritRotation)
-						if json_result.armature[i].bone[b].has("inheritScale"):
-							remote.set_update_scale(json_result.armature[i].bone[b].inheritScale)
+						if b.has("inheritRotation"):
+							remote.set_update_rotation(b.inheritRotation)
+						if b.has("inheritScale"):
+							remote.set_update_scale(b.inheritScale)
 						par.add_child(remote);
-						bone.set_name(json_result.armature[i].bone[b].name);
+						bone.set_name(b.name);
 						remote.set_name("[RE]"+bone.name)
 						remote.remote_path=remote.get_path_to(bone)  #bone.get_path()
 
-						if json_result.armature[i].bone[b].has("transform"):
+						if b.has("transform"):
 
-							if json_result.armature[i].bone[b].transform.has("skX"):
-								if json_result.armature[i].bone[b].has("inheritRotation"):
-									if not json_result.armature[i].bone[b].inheritRotation:
-										bone.set_global_rotation_degrees(json_result.armature[i].bone[b].transform.skX)
-								remote.set_rotation_degrees(json_result.armature[i].bone[b].transform.skX)
+							if b.transform.has("skX"):
+								if b.has("inheritRotation"):
+									if not b.inheritRotation:
+										bone.set_global_rotation_degrees(b.transform.skX)
+								remote.set_rotation_degrees(b.transform.skX)
 
-							if json_result.armature[i].bone[b].transform.has("skY"):
-								if json_result.armature[i].bone[b].has("inheritRotation"):
-									if not json_result.armature[i].bone[b].inheritRotation:
-										bone.set_global_rotation_degrees(json_result.armature[i].bone[b].transform.skY)
-								remote.set_rotation_degrees(json_result.armature[i].bone[b].transform.skY)
+							if b.transform.has("skY"):
+								if b.has("inheritRotation"):
+									if not b.inheritRotation:
+										bone.set_global_rotation_degrees(b.transform.skY)
+								remote.set_rotation_degrees(b.transform.skY)
 
-						if json_result.armature[i].bone[b].has("inheritScale"):
-							if not json_result.armature[i].bone[b].inheritScale:
+						if b.has("inheritScale"):
+							if not b.inheritScale:
 								bone.set_global_scale(b_scale)
 
 						remote.set_global_scale(b_scale)
@@ -166,33 +156,32 @@ func dbimport(val):
 
 						var target;
 
-						if json_result.armature[i].bone[b].has("inheritRotation") || json_result.armature[i].bone[b].has("inheritScale"):
+						if b.has("inheritRotation") || b.has("inheritScale"):
 							target = remote;
 						else:
 							target = bone
 
 						track = rest.add_track(Animation.TYPE_VALUE)
-						rest.value_track_set_update_mode(track,Animation.UPDATE_DISCRETE)
 						rest.track_set_path(track, String(skeleton.get_path_to(target))+":position");
 						rest.track_insert_key(track, 0, target.position);
 
-						if json_result.armature[i].bone[b].has("inheritRotation"):
-							if json_result.armature[i].bone[b].inheritRotation==false:
+						if b.has("inheritRotation"):
+							if b.inheritRotation==false:
 								target = bone;
 						else:
 							target = remote;
 
 						track = rest.add_track(Animation.TYPE_VALUE)
 						rest.value_track_set_update_mode(track,Animation.UPDATE_DISCRETE)
-						if json_result.armature[i].bone[b].has("inheritRotation") && json_result.armature[i].bone[b].inheritRotation==false:
+						if b.has("inheritRotation") && b.inheritRotation==false:
 							rest.track_set_path(track, String(skeleton.get_path_to(bone))+":global_rotation_degrees");
 							rest.track_insert_key(track, 0, bone.global_rotation_degrees);
 						else:
 							rest.track_set_path(track, String(skeleton.get_path_to(target))+":rotation_degrees");
 							rest.track_insert_key(track, 0, target.rotation_degrees);
 
-						if json_result.armature[i].bone[b].has("inheritScale"):
-							if json_result.armature[i].bone[b].inheritScale==false:
+						if b.has("inheritScale"):
+							if b.inheritScale==false:
 								target = bone;
 						else:
 							target = remote;
@@ -204,12 +193,12 @@ func dbimport(val):
 
 					else:
 						par.add_child(bone);
-						if json_result.armature[i].bone[b].has("transform"):
-							if json_result.armature[i].bone[b].transform.has("skX"):
-								bone.set_rotation_degrees(json_result.armature[i].bone[b].transform.skX)
-							if json_result.armature[i].bone[b].transform.has("skY"):
-								bone.set_rotation_degrees(json_result.armature[i].bone[b].transform.skY)
-						bone.set_name(json_result.armature[i].bone[b].name);
+						if b.has("transform"):
+							if b.transform.has("skX"):
+								bone.set_rotation_degrees(b.transform.skX)
+							if b.transform.has("skY"):
+								bone.set_rotation_degrees(b.transform.skY)
+						bone.set_name(b.name);
 						bone.set_scale(b_scale)
 						bone.set_length(0)
 						bone.set_position(pointB);
@@ -229,21 +218,21 @@ func dbimport(val):
 						rest.track_set_path(track, String(skeleton.get_path_to(bone))+":scale");
 						rest.track_insert_key(track, 0, bone.scale);
 
-					if json_result.armature[i].bone[b].has("length"):
-						bone.set_length(json_result.armature[i].bone[b].length)
+					if b.has("length"):
+						bone.set_length(b.length)
 					else:
 						bone.set("editor_settings/show_bone_gizmo",false)
 					bone.owner = get_tree().edited_scene_root
 
 				else:
-					bone.set_name(json_result.armature[i].bone[b].name);
+					bone.set_name(b.name);
 					bone.set_length(0);
 					var origin = Vector2(0,0);
-					if json_result.armature[i].bone[b].has("transform"):
-						if json_result.armature[i].bone[b].transform.has("x") :
-							origin.x=json_result.armature[i].bone[b].transform.x;
-						if json_result.armature[i].bone[b].transform.has("y") :
-							origin.y=json_result.armature[i].bone[b].transform.y;
+					if b.has("transform"):
+						if b.transform.has("x") :
+							origin.x=b.transform.x;
+						if b.transform.has("y") :
+							origin.y=b.transform.y;
 					bone.set_position(origin);
 					skeleton.add_child(bone)
 					bone.owner = get_tree().edited_scene_root
@@ -540,152 +529,120 @@ func dbimport(val):
 		AP.owner = get_tree().edited_scene_root
 		var AL = AnimationLibrary.new()
 
-		for an in json_result.armature[i].animation.size():
+		for an in json_result.armature[i].animation:
 			var animation = Animation.new()
 			var length=1;
 			var framerate = 1/json_result.armature[i].frameRate
 
-			if json_result.armature[i].animation[an].has("duration"):
-				length=json_result.armature[i].animation[an].duration*framerate
+			if an.has("duration"):
+				length=an.duration*framerate
 #actions
-			if json_result.armature[i].animation[an].has("frame"):
+			if an.has("frame"):
 				pass;
 
-			if json_result.armature[i].animation[an].has("bone"):
-				for bi in json_result.armature[i].animation[an].bone.size():
-
-					if json_result.armature[i].animation[an].bone[bi].has("translateFrame"):
+			if an.has("bone"):
+				for bone in an.bone:
+					if bone.has("translateFrame"):
 						var write_head=0;
 						var bone_position;
 						var path;
-						var bone_ref = skeleton.find_child("[RE]"+json_result.armature[i].animation[an].bone[bi].name)
+						var bone_ref = skeleton.find_child("[RE]"+bone.name)
 						if bone_ref == null:
-							bone_position = skeleton.find_child(json_result.armature[i].animation[an].bone[bi].name).position
-							path = String(skeleton.get_path_to(skeleton.find_child(json_result.armature[i].animation[an].bone[bi].name)))+":position"
-						else:
-							bone_position = skeleton.find_child("[RE]"+json_result.armature[i].animation[an].bone[bi].name).position
-							path = String(skeleton.get_path_to(skeleton.find_child("[RE]"+json_result.armature[i].animation[an].bone[bi].name)))+":position"
+							bone_ref = skeleton.find_child(bone.name);
 
-						var track_pos_x_index = animation.add_track(Animation.TYPE_BEZIER)
-						var track_pos_y_index = animation.add_track(Animation.TYPE_BEZIER)
-						animation.track_set_path(track_pos_x_index, path+":x")
-						animation.track_set_path(track_pos_y_index, path+":y")
+						bone_position = bone_ref.position
+						path = String(skeleton.get_path_to(bone_ref))+":position"
+						var track_pos_index = createAnimTrack(animation, path,bone.translateFrame[0]);
 
-						var inx = 0;
-						var iny = 0;
-						var dur = 0;
-
-						for f in json_result.armature[i].animation[an].bone[bi].translateFrame.size():
+						for frame in bone.translateFrame:
 
 							var newPos = bone_position
-							if  json_result.armature[i].animation[an].bone[bi].translateFrame[f].has("x"):
-								newPos.x+=json_result.armature[i].animation[an].bone[bi].translateFrame[f].x
-							if  json_result.armature[i].animation[an].bone[bi].translateFrame[f].has("y"):
-								newPos.y+=json_result.armature[i].animation[an].bone[bi].translateFrame[f].y
-							animation.bezier_track_insert_key(track_pos_x_index, write_head, newPos.x)
-							animation.bezier_track_insert_key(track_pos_y_index, write_head, newPos.y)
-							if json_result.armature[i].animation[an].bone[bi].translateFrame[f].has("duration"):
-								write_head+=json_result.armature[i].animation[an].bone[bi].translateFrame[f].duration*framerate
+							if  frame.has("x"):
+								newPos.x+=frame.x
+							if  frame.has("y"):
+								newPos.y+=frame.y
+							addAnimKey(animation, track_pos_index, frame, write_head, newPos);
+							if frame.has("duration"):
+								write_head+=frame.duration*framerate
 							else:
 								write_head+=framerate
 
-						var offset = 0;
-						for f in json_result.armature[i].animation[an].bone[bi].translateFrame.size():
-							if json_result.armature[i].animation[an].bone[bi].translateFrame[f].has("curve"):
-								curvature(animation,track_pos_y_index,f+offset,json_result.armature[i].animation[an].bone[bi].translateFrame[f].curve);
-								offset += curvature(animation,track_pos_x_index,f+offset,json_result.armature[i].animation[an].bone[bi].translateFrame[f].curve);
-
-					if json_result.armature[i].animation[an].bone[bi].has("rotateFrame"):
+					if bone.has("rotateFrame"):
 						var write_head=0;
 						var bone_rot;
 						var path;
-						var bone_ref = skeleton.find_child("[RE]"+json_result.armature[i].animation[an].bone[bi].name)
+						var bone_ref = skeleton.find_child("[RE]"+bone.name)
 						if bone_ref == null:
-							bone_ref = skeleton.find_child(json_result.armature[i].animation[an].bone[bi].name)
-							bone_rot = skeleton.find_child(json_result.armature[i].animation[an].bone[bi].name).rotation_degrees
-							path = String(skeleton.get_path_to(skeleton.find_child(json_result.armature[i].animation[an].bone[bi].name)))+":rotation_degrees"
+							bone_ref = skeleton.find_child(bone.name)
+							bone_rot = skeleton.find_child(bone.name).rotation_degrees
+							path = String(skeleton.get_path_to(skeleton.find_child(bone.name)))+":rotation_degrees"
 						else:
 							if not bone_ref.update_rotation:  #use global rotation
-								bone_rot = skeleton.find_child(json_result.armature[i].animation[an].bone[bi].name).global_rotation_degrees # + 90
-								path = String(skeleton.get_path_to(skeleton.find_child(json_result.armature[i].animation[an].bone[bi].name)))+":global_rotation_degrees"
+								bone_rot = skeleton.find_child(bone.name).global_rotation_degrees # + 90
+								path = String(skeleton.get_path_to(skeleton.find_child(bone.name)))+":global_rotation_degrees"
 							else:
-								bone_rot = skeleton.find_child("[RE]"+json_result.armature[i].animation[an].bone[bi].name).rotation_degrees
-								path = String(skeleton.get_path_to(skeleton.find_child("[RE]"+json_result.armature[i].animation[an].bone[bi].name)))+":rotation_degrees"
+								bone_rot = skeleton.find_child("[RE]"+bone.name).rotation_degrees
+								path = String(skeleton.get_path_to(skeleton.find_child("[RE]"+bone.name)))+":rotation_degrees"
 
-						var track_rot_index = animation.add_track(Animation.TYPE_BEZIER)
-						animation.track_set_path(track_rot_index, path)
+						var track_index = createAnimTrack(animation, path,bone.rotateFrame[0]);
 
 						var cwRot = 0;
 						var newRot  = 0;
 						var offset = 0;
 
-						for f in json_result.armature[i].animation[an].bone[bi].rotateFrame.size():
+						for f in bone.rotateFrame.size():
 							newRot = bone_rot
 
-							if  json_result.armature[i].animation[an].bone[bi].rotateFrame[f].has("rotate"):
-								newRot += json_result.armature[i].animation[an].bone[bi].rotateFrame[f].rotate
+							if  bone.rotateFrame[f].has("rotate"):
+								newRot += bone.rotateFrame[f].rotate
 
 							newRot += cwRot+offset
 							offset += cwRot
 
 							cwRot=0;
-							if  json_result.armature[i].animation[an].bone[bi].rotateFrame[f].has("clockwise"):
-								cwRot = 360*(json_result.armature[i].animation[an].bone[bi].rotateFrame[f].clockwise);
-							animation.bezier_track_insert_key(track_rot_index, write_head, newRot, Vector2(0,0), Vector2(0,0))
-							if  json_result.armature[i].animation[an].bone[bi].rotateFrame[f].has("duration"):
-								write_head+=json_result.armature[i].animation[an].bone[bi].rotateFrame[f].duration*framerate
+							if  bone.rotateFrame[f].has("clockwise"):
+								cwRot = 360*(bone.rotateFrame[f].clockwise);
+							addAnimKey(animation, track_index, bone.rotateFrame[f], write_head, newRot);
+
+							if  bone.rotateFrame[f].has("duration"):
+								write_head+=bone.rotateFrame[f].duration*framerate
 							else:
 								write_head+= framerate
 
-						offset = 0;
-						for f in json_result.armature[i].animation[an].bone[bi].rotateFrame.size():
-							if json_result.armature[i].animation[an].bone[bi].rotateFrame[f].has("curve"):
-								offset+=curvature(animation,track_rot_index,f+offset,json_result.armature[i].animation[an].bone[bi].rotateFrame[f].curve);
-
-					if json_result.armature[i].animation[an].bone[bi].has("scaleFrame"):
+					if bone.has("scaleFrame"):
 
 						var write_head=0;
 						var s_scale;
 						var path;
-						var bone_ref = skeleton.find_child("[RE]"+json_result.armature[i].animation[an].bone[bi].name)
+						var bone_ref = skeleton.find_child("[RE]"+bone.name)
 
 						if bone_ref == null:
-							s_scale = skeleton.find_child(json_result.armature[i].animation[an].bone[bi].name).scale
-							path = String(skeleton.get_path_to(skeleton.find_child(json_result.armature[i].animation[an].bone[bi].name)))+":scale"
+							s_scale = skeleton.find_child(bone.name).scale
+							path = String(skeleton.get_path_to(skeleton.find_child(bone.name)))+":scale"
 						else:
 							if not bone_ref.update_scale:
-								s_scale = skeleton.find_child(json_result.armature[i].animation[an].bone[bi].name).scale
-								path = String(skeleton.get_path_to(skeleton.find_child(json_result.armature[i].animation[an].bone[bi].name)))+":scale"
+								s_scale = skeleton.find_child(bone.name).scale
+								path = String(skeleton.get_path_to(skeleton.find_child(bone.name)))+":scale"
 							else:
-								s_scale = skeleton.find_child("[RE]"+json_result.armature[i].animation[an].bone[bi].name).scale
-								path = String(skeleton.get_path_to(skeleton.find_child("[RE]"+json_result.armature[i].animation[an].bone[bi].name)))+":scale"
+								s_scale = skeleton.find_child("[RE]"+bone.name).scale
+								path = String(skeleton.get_path_to(skeleton.find_child("[RE]"+bone.name)))+":scale"
 
-						var track_scale_x_index = animation.add_track(Animation.TYPE_BEZIER)
-						var track_scale_y_index = animation.add_track(Animation.TYPE_BEZIER)
-						animation.track_set_path(track_scale_x_index, path+":x")
-						animation.track_set_path(track_scale_y_index, path+":y")
+						var track_id = createAnimTrack(animation, path, bone.scaleFrame[0]);
 
-						for f in json_result.armature[i].animation[an].bone[bi].scaleFrame.size():
+						for f in bone.scaleFrame.size():
 							var newScale = s_scale
-							if  json_result.armature[i].animation[an].bone[bi].scaleFrame[f].has("x"):
-								newScale.x = json_result.armature[i].animation[an].bone[bi].scaleFrame[f].x
-							if  json_result.armature[i].animation[an].bone[bi].scaleFrame[f].has("y"):
-								newScale.y = json_result.armature[i].animation[an].bone[bi].scaleFrame[f].y
-							animation.bezier_track_insert_key(track_scale_x_index, write_head, newScale.x)
-							animation.bezier_track_insert_key(track_scale_y_index, write_head, newScale.y)
-							var d = json_result.armature[i].animation[an].bone[bi].scaleFrame[f].get("duration")
+							if  bone.scaleFrame[f].has("x"):
+								newScale.x = bone.scaleFrame[f].x
+							if  bone.scaleFrame[f].has("y"):
+								newScale.y = bone.scaleFrame[f].y
+							addAnimKey(animation,track_id, bone.scaleFrame[f], write_head, newScale);
+							var d = bone.scaleFrame[f].get("duration")
 							if d==null:
 								d = 1
 							write_head+=d*framerate
 
-						var offset = 0;
-						for f in json_result.armature[i].animation[an].bone[bi].scaleFrame.size():
-							if json_result.armature[i].animation[an].bone[bi].scaleFrame[f].has("curve"):
-								curvature(animation,track_scale_x_index,f+offset,json_result.armature[i].animation[an].bone[bi].scaleFrame[f].curve)
-								offset+=curvature(animation,track_scale_y_index,f+offset,json_result.armature[i].animation[an].bone[bi].scaleFrame[f].curve);
-
-			if json_result.armature[i].animation[an].has("ffd"):
-				for ffdi in json_result.armature[i].animation[an].ffd.size():
+			if an.has("ffd"):
+				for ffdi in an.ffd.size():
 					var track_ffd_index = animation.add_track(Animation.TYPE_BEZIER)
 
 					var track_start = animation.add_track(Animation.TYPE_VALUE)
@@ -694,37 +651,37 @@ func dbimport(val):
 					var track_end = animation.add_track(Animation.TYPE_VALUE)
 					animation.value_track_set_update_mode(track_end,Animation.UPDATE_DISCRETE)
 
-					var f_name = json_result.armature[i].animation[an].ffd[ffdi].name
+					var f_name = an.ffd[ffdi].name
 
 					if f_name.rfind("/")!=-1:
 						f_name = f_name.substr(f_name.rfind("/")+1)
 
-					skeleton.find_child("SLOTS",false).find_child(json_result.armature[i].animation[an].ffd[ffdi].slot,false).find_child(f_name).set_script(load("res://addons/DBI/PolyEaseCurve.gd"))
+					skeleton.find_child("SLOTS",false).find_child(an.ffd[ffdi].slot,false).find_child(f_name).set_script(load("res://addons/DBI/PolyEaseCurve.gd"))
 
-					var path = String(skeleton.get_path_to(skeleton.find_child("SLOTS",false).find_child(json_result.armature[i].animation[an].ffd[ffdi].slot,false).find_child(f_name)))
+					var path = String(skeleton.get_path_to(skeleton.find_child("SLOTS",false).find_child(an.ffd[ffdi].slot,false).find_child(f_name)))
 					animation.track_set_path(track_ffd_index, path+":delta");
 
 					animation.track_set_path(track_start, path+":start");
 					animation.track_set_path(track_end, path+":end");
 
-					if json_result.armature[i].animation[an].ffd[ffdi].has("frame"):
+					if an.ffd[ffdi].has("frame"):
 						var write_head=0;
 						var frames = [];
-						for f in json_result.armature[i].animation[an].ffd[ffdi].frame.size():
+						for f in an.ffd[ffdi].frame.size():
 							var offset=0
-							var nextvec = true_vertex_oder_dict[json_result.armature[i].animation[an].ffd[ffdi].slot][f_name].oder.duplicate()
+							var nextvec = true_vertex_oder_dict[an.ffd[ffdi].slot][f_name].oder.duplicate()
 
-							if json_result.armature[i].animation[an].ffd[ffdi].frame[f].has("offset"):
-								offset = json_result.armature[i].animation[an].ffd[ffdi].frame[f].offset
+							if an.ffd[ffdi].frame[f].has("offset"):
+								offset = an.ffd[ffdi].frame[f].offset
 
-							if json_result.armature[i].animation[an].ffd[ffdi].frame[f].has("vertices"):
+							if an.ffd[ffdi].frame[f].has("vertices"):
 								var vert_arr = []
 								for v in nextvec.size():
 									vert_arr.push_back(nextvec[v].x)
 									vert_arr.push_back(nextvec[v].y)
 
-								for v in json_result.armature[i].animation[an].ffd[ffdi].frame[f].vertices.size():
-									vert_arr[offset]+=json_result.armature[i].animation[an].ffd[ffdi].frame[f].vertices[v]
+								for v in an.ffd[ffdi].frame[f].vertices.size():
+									vert_arr[offset]+=an.ffd[ffdi].frame[f].vertices[v]
 									offset+=1
 
 								nextvec.clear();
@@ -733,8 +690,8 @@ func dbimport(val):
 									nextvec.push_back(Vector2(vert_arr[v],vert_arr[v+1]))
 
 							var keyframe = PackedVector2Array()
-							var edges = true_vertex_oder_dict[json_result.armature[i].animation[an].ffd[ffdi].slot][f_name].edges;
-							var trans = true_vertex_oder_dict[json_result.armature[i].animation[an].ffd[ffdi].slot][f_name].transformation
+							var edges = true_vertex_oder_dict[an.ffd[ffdi].slot][f_name].edges;
+							var trans = true_vertex_oder_dict[an.ffd[ffdi].slot][f_name].transformation
 
 							for p in range(0,edges.size()-1,2):
 								keyframe.push_back(trans*nextvec[edges[p]])
@@ -744,7 +701,7 @@ func dbimport(val):
 
 							frames.push_back(write_head)
 							frames.push_back(keyframe)
-							write_head+=json_result.armature[i].animation[an].ffd[ffdi].frame[f].duration*framerate
+							write_head+=an.ffd[ffdi].frame[f].duration*framerate
 						
 						#print(frames);  #111
 						for f in range(0,frames.size(),2):
@@ -763,66 +720,37 @@ func dbimport(val):
 									animation.track_insert_key(track_start, frames[f], frames[f+1])
 									animation.track_insert_key(track_end,   frames[f], frames[f+3])
 
-						var offset = 0;
-						for f in json_result.armature[i].animation[an].ffd[ffdi].frame.size():
-							if json_result.armature[i].animation[an].ffd[ffdi].frame[f].has("curve"):
-								if(f>0):
-									offset+=curvature(animation,track_ffd_index,f+offset+0.0001,json_result.armature[i].animation[an].ffd[ffdi].frame[f].curve);
-								else:
-									offset+=curvature(animation,track_ffd_index,f,json_result.armature[i].animation[an].ffd[ffdi].frame[f].curve);
+			if an.has("slot"):
+				for sl in an.slot:
 
-			if json_result.armature[i].animation[an].has("slot"):
-				for sl in json_result.armature[i].animation[an].slot.size():
-
-					if json_result.armature[i].animation[an].slot[sl].has("colorFrame"):
-
+					if sl.has("colorFrame"):
 						var write_head=0;
-						var slot = skeleton.find_child("SLOTS",false).find_child(json_result.armature[i].animation[an].slot[sl].name)
-						var track_aM_index = animation.add_track(Animation.TYPE_BEZIER)
-						var track_rM_index = animation.add_track(Animation.TYPE_BEZIER)
-						var track_gM_index = animation.add_track(Animation.TYPE_BEZIER)
-						var track_bM_index = animation.add_track(Animation.TYPE_BEZIER)
+						var slot = skeleton.find_child("SLOTS",false).find_child(sl.name)
 						var path = String(skeleton.get_path_to(slot))+":modulate"
-						animation.track_set_path(track_aM_index, path+":a");
-						animation.track_set_path(track_rM_index, path+":r");
-						animation.track_set_path(track_gM_index, path+":g");
-						animation.track_set_path(track_bM_index, path+":b");
-#move to init or don't give a fuck
+						var track = createAnimTrack(animation, path, sl.colorFrame[0]);
+
 						if(rest.find_track(path, Animation.TYPE_VALUE)==-1):
-							var track = rest.add_track(Animation.TYPE_VALUE)
-							rest.track_set_path(track, path)
-							rest.track_insert_key(track, write_head, slot.modulate);
+							var rest_track = rest.add_track(Animation.TYPE_VALUE)
+							rest.track_set_path(rest_track, path)
+							rest.track_insert_key(rest_track, write_head, slot.current);
 
-						for frame in json_result.armature[i].animation[an].slot[sl].colorFrame.size():
-							var value = slot.modulate;
-							if json_result.armature[i].animation[an].slot[sl].colorFrame[frame].has("value"):
-								if json_result.armature[i].animation[an].slot[sl].colorFrame[frame].value.has("aM"):
-									value.a = json_result.armature[i].animation[an].slot[sl].colorFrame[frame].value.aM/100
-								if json_result.armature[i].animation[an].slot[sl].colorFrame[frame].value.has("rM"):
-									value.r = json_result.armature[i].animation[an].slot[sl].colorFrame[frame].value.rM/100
-								if json_result.armature[i].animation[an].slot[sl].colorFrame[frame].value.has("gM"):
-									value.g = json_result.armature[i].animation[an].slot[sl].colorFrame[frame].value.gM/100
-								if json_result.armature[i].animation[an].slot[sl].colorFrame[frame].value.has("bM"):
-									value.b = json_result.armature[i].animation[an].slot[sl].colorFrame[frame].value.bM/100
+						for frame in sl.colorFrame:
+							var value = Color(1,1,1,1);
+							if frame.has("value"):
+								if frame.value.has("aM"):
+									value.a = frame.value.aM/100
+								if frame.value.has("rM"):
+									value.r = frame.value.rM/100
+								if frame.value.has("gM"):
+									value.g = frame.value.gM/100
+								if frame.value.has("bM"):
+									value.b = frame.value.bM/100
+							addAnimKey(animation, track, frame, write_head, value);
+							write_head+=frame.duration*framerate
 
-							animation.bezier_track_insert_key(track_aM_index, write_head, value.a)
-							animation.bezier_track_insert_key(track_rM_index, write_head, value.r)
-							animation.bezier_track_insert_key(track_gM_index, write_head, value.g)
-							animation.bezier_track_insert_key(track_bM_index, write_head, value.b)
-
-							write_head+=json_result.armature[i].animation[an].slot[sl].colorFrame[frame].duration*framerate
-
-						var offset = 0;
-						for f in json_result.armature[i].animation[an].slot[sl].colorFrame.size():
-							if json_result.armature[i].animation[an].slot[sl].colorFrame[f].has("curve"):
-								curvature(animation,track_aM_index,f+offset,json_result.armature[i].animation[an].slot[sl].colorFrame[f].curve)
-								curvature(animation,track_rM_index,f+offset,json_result.armature[i].animation[an].slot[sl].colorFrame[f].curve)
-								curvature(animation,track_gM_index,f+offset,json_result.armature[i].animation[an].slot[sl].colorFrame[f].curve)
-								offset+=curvature(animation,track_bM_index,f+offset,json_result.armature[i].animation[an].slot[sl].colorFrame[f].curve)
-
-					if json_result.armature[i].animation[an].slot[sl].has("displayFrame"):
+					if sl.has("displayFrame"):
 						var write_head=0;
-						var slot = skeleton.find_child("SLOTS",false).find_child(json_result.armature[i].animation[an].slot[sl].name)
+						var slot = skeleton.find_child("SLOTS",false).find_child(sl.name)
 						var track_slot_index = animation.add_track(Animation.TYPE_VALUE)
 						animation.value_track_set_update_mode(track_slot_index,Animation.UPDATE_DISCRETE)
 						var path = String(skeleton.get_path_to(slot))+":current"
@@ -833,36 +761,36 @@ func dbimport(val):
 							rest.track_set_path(track, path)
 							rest.track_insert_key(track, write_head, slot.current);
 
-						for frame in json_result.armature[i].animation[an].slot[sl].displayFrame.size():
+						for frame in sl.displayFrame.size():
 							var value = 0;
-							if json_result.armature[i].animation[an].slot[sl].displayFrame[frame].has("value"):
-								value = json_result.armature[i].animation[an].slot[sl].displayFrame[frame].value
+							if sl.displayFrame[frame].has("value"):
+								value = sl.displayFrame[frame].value
 							animation.track_insert_key(track_slot_index, write_head, value)
-							if json_result.armature[i].animation[an].slot[sl].displayFrame[frame].has("duration"):
-								write_head+=json_result.armature[i].animation[an].slot[sl].displayFrame[frame].duration*framerate
+							if sl.displayFrame[frame].has("duration"):
+								write_head+=sl.displayFrame[frame].duration*framerate
 							else:
 								write_head += framerate
 
-			if json_result.armature[i].animation[an].has("zOrder"):
-				if json_result.armature[i].animation[an].zOrder.has("frame"):
+			if an.has("zOrder"):
+				if an.zOrder.has("frame"):
 					var slots = skeleton.find_child("SLOTS")
 					var track_slot_index = animation.add_track(Animation.TYPE_VALUE)
 					animation.value_track_set_update_mode(track_slot_index,Animation.UPDATE_DISCRETE)
 					var path = String(skeleton.get_path_to(slots))+":sl_oder"
 					animation.track_set_path(track_slot_index, path);
 					var write_head=0
-					for frame in json_result.armature[i].animation[an].zOrder.frame.size():
+					for frame in an.zOrder.frame.size():
 						var arr = []
-						if json_result.armature[i].animation[an].zOrder.frame[frame].has("zOrder"):
-							arr = json_result.armature[i].animation[an].zOrder.frame[frame].zOrder
+						if an.zOrder.frame[frame].has("zOrder"):
+							arr = an.zOrder.frame[frame].zOrder
 						animation.track_insert_key(track_slot_index, write_head, arr)
-						write_head+=json_result.armature[i].animation[an].zOrder.frame[frame].duration*framerate
+						write_head+=an.zOrder.frame[frame].duration*framerate
 #bend direction and weight
-			if json_result.armature[i].animation[an].has("ik"):
+			if an.has("ik"):
 				pass;
 
 			animation.set_length(length);
-			AL.add_animation(json_result.armature[i].animation[an].name, animation)
+			AL.add_animation(an.name, animation)
 
 		AL.add_animation("RESET",rest);
 		AP.add_animation_library("", AL)
