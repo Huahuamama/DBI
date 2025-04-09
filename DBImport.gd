@@ -285,10 +285,10 @@ func dbimport(val):
 				masterslot.add_child(slot);
 				slot.owner = get_tree().edited_scene_root
 
-				var track = rest.add_track(Animation.TYPE_VALUE)
-				rest.value_track_set_update_mode(track,Animation.UPDATE_DISCRETE)
-				rest.track_set_path(track, String(skeleton.get_path_to(slot))+":modulate");
-				rest.track_insert_key(track, 0, slot.modulate);
+				# var track = rest.add_track(Animation.TYPE_VALUE)
+				# rest.value_track_set_update_mode(track,Animation.UPDATE_DISCRETE)
+				# rest.track_set_path(track, String(skeleton.get_path_to(slot))+":modulate");
+				# rest.track_insert_key(track, 0, slot.modulate);
 
 			masterslot.set_rest()
 
