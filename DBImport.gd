@@ -233,6 +233,10 @@ func dbimport(val):
 							origin.x=b.transform.x;
 						if b.transform.has("y") :
 							origin.y=b.transform.y;
+						if b.transform.has("skX"):
+							bone.set_rotation_degrees(b.transform.skX)
+						if b.transform.has("skY"):
+							bone.set_rotation_degrees(b.transform.skY)
 					bone.set_position(origin);
 					skeleton.add_child(bone)
 					bone.owner = get_tree().edited_scene_root
@@ -728,11 +732,6 @@ func dbimport(val):
 						var slot = skeleton.find_child("SLOTS",false).find_child(sl.name)
 						var path = String(skeleton.get_path_to(slot))+":modulate"
 						var track = createAnimTrack(animation, path, sl.colorFrame[0]);
-
-						if(rest.find_track(path, Animation.TYPE_VALUE)==-1):
-							var rest_track = rest.add_track(Animation.TYPE_VALUE)
-							rest.track_set_path(rest_track, path)
-							rest.track_insert_key(rest_track, write_head, slot.current);
 
 						for frame in sl.colorFrame:
 							var value = Color(1,1,1,1);
