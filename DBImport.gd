@@ -177,8 +177,8 @@ func dbimport(val):
 							rest.track_set_path(track, String(skeleton.get_path_to(bone))+":global_rotation_degrees");
 							rest.track_insert_key(track, 0, bone.global_rotation_degrees);
 						else:
-							rest.track_set_path(track, String(skeleton.get_path_to(target))+":rotation_degrees");
-							rest.track_insert_key(track, 0, target.rotation_degrees);
+							rest.track_set_path(track, String(skeleton.get_path_to(target))+":rotation");
+							rest.track_insert_key(track, 0, target.rotation_degrees * PI / 180);
 
 						if b.has("inheritScale"):
 							if b.inheritScale==false:
@@ -210,8 +210,8 @@ func dbimport(val):
 
 						track = rest.add_track(Animation.TYPE_VALUE)
 						rest.value_track_set_update_mode(track,Animation.UPDATE_DISCRETE)
-						rest.track_set_path(track, String(skeleton.get_path_to(bone))+":rotation_degrees");
-						rest.track_insert_key(track, 0, bone.rotation_degrees);
+						rest.track_set_path(track, String(skeleton.get_path_to(bone))+":rotation");
+						rest.track_insert_key(track, 0, bone.rotation_degrees * PI / 180);
 
 						track = rest.add_track(Animation.TYPE_VALUE)
 						rest.value_track_set_update_mode(track,Animation.UPDATE_DISCRETE)
@@ -247,8 +247,8 @@ func dbimport(val):
 
 					track = rest.add_track(Animation.TYPE_VALUE)
 					rest.value_track_set_update_mode(track,Animation.UPDATE_DISCRETE)
-					rest.track_set_path(track, path+":rotation_degrees");
-					rest.track_insert_key(track, 0, bone.rotation_degrees);
+					rest.track_set_path(track, path+":rotation");
+					rest.track_insert_key(track, 0, bone.rotation_degrees * PI / 180);
 
 					track = rest.add_track(Animation.TYPE_VALUE)
 					rest.value_track_set_update_mode(track,Animation.UPDATE_DISCRETE)
@@ -575,34 +575,34 @@ func dbimport(val):
 						if bone_ref == null:
 							bone_ref = skeleton.find_child(bone.name)
 							bone_rot = skeleton.find_child(bone.name).rotation_degrees
-							path = String(skeleton.get_path_to(skeleton.find_child(bone.name)))+":rotation_degrees"
+							path = String(skeleton.get_path_to(skeleton.find_child(bone.name)))+":rotation"
 						else:
 							if not bone_ref.update_rotation:  #use global rotation
 								bone_rot = skeleton.find_child(bone.name).global_rotation_degrees # + 90
-								path = String(skeleton.get_path_to(skeleton.find_child(bone.name)))+":global_rotation_degrees"
+								path = String(skeleton.get_path_to(skeleton.find_child(bone.name)))+":global_rotation"
 							else:
 								bone_rot = skeleton.find_child("[RE]"+bone.name).rotation_degrees
-								path = String(skeleton.get_path_to(skeleton.find_child("[RE]"+bone.name)))+":rotation_degrees"
+								path = String(skeleton.get_path_to(skeleton.find_child("[RE]"+bone.name)))+":rotation"
 
 						var track_index = createAnimTrack(animation, path,bone.rotateFrame[0]);
 
-						var cwRot = 0;
-						var newRot  = 0;
-						var offset = 0;
+						var offset = bone_rot;
 
 						for f in bone.rotateFrame.size():
-							newRot = bone_rot
+							var newRot = bone_rot
 
 							if  bone.rotateFrame[f].has("rotate"):
 								newRot += bone.rotateFrame[f].rotate
 
-							newRot += cwRot+offset
-							offset += cwRot
+							
+							if (newRot - offset > 180):
+								newRot -= 360;
+							
+							if (offset - newRot > 180):
+								newRot += 360
 
-							cwRot=0;
-							if  bone.rotateFrame[f].has("clockwise"):
-								cwRot = 360*(bone.rotateFrame[f].clockwise);
-							addAnimKey(animation, track_index, bone.rotateFrame[f], write_head, newRot);
+							offset = newRot;
+							addAnimKey(animation, track_index, bone.rotateFrame[f], write_head, newRot * PI /180);
 
 							if  bone.rotateFrame[f].has("duration"):
 								write_head+=bone.rotateFrame[f].duration*framerate
