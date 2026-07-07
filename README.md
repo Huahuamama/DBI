@@ -9,7 +9,7 @@ Import DragonBones files directly into Godot as fully editable native skeletal a
 *   **Godot Version:** 4.x
 
 ### 💡 Why Use This Plugin?
-While official or community runtime libraries exist for DragonBones, they often treat imported animations as a "black box," making it extremely difficult to tweak or modify keys directly inside Godot. 
+Other plugins often treat imported animations as a "black box," making it extremely difficult to tweak or modify keys directly inside Godot. 
 Converting your assets into native bones and `AnimationPlayer` tracks unlocks the full power of Godot's native ecosystem (like `AnimationTree` state machines) and gives you total freedom to fine-tune, rewrite, or rearrange keyframes directly in the editor timeline.
 
 ---
