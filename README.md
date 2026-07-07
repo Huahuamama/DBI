@@ -34,7 +34,9 @@ To avoid potential workflow bottlenecks, please note that the following features
     *   If you utilized the DragonBones **Bounding Box** feature to create **deformable meshes (Mesh Deform/FFD)**, the imported images may display stretching, misalignment, or rendering artifacts in Godot. It is highly recommended to stick to rigid bone rotation/scaling for animations.
 4.  **No Mid-Animation Slot Draw Order Changes**: 
     *   If your DragonBones animation alters the slot depth/z-ordering (Draw Order changes) **in the middle of a timeline**, the plugin cannot currently translate those depth changes into Godot animation keys.
-
+5.  **Incorrect Rotation Direction (Shortest Path vs. Numeric Value)**:
+    *   After importing, some bones might spin the wrong way. This happens because DragonBones calculates rotation interpolations using the **shortest path method** (automatically choosing the shortest arc), whereas Godot strictly interpolates linearly based on the **numeric degree value** of the keyframes. If a bone flips unexpectedly or spins backwards, you will need to manually adjust those key values in Godot's animation timeline.
+    *   
 ---
 
 ## 🛠️ Installation
