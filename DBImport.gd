@@ -28,10 +28,10 @@ func createAnimTrack(anim: Animation, path, firstFrame) -> int:
 	var track_index = anim.add_track(Animation.TYPE_VALUE);
 	anim.track_set_path(track_index, path)
 	
-	if firstFrame.has("tweenEasing") or firstFrame.has("curve"):
-		anim.value_track_set_update_mode(track_index, Animation.UPDATE_CONTINUOUS)
-	else:
-		anim.value_track_set_update_mode(track_index, Animation.UPDATE_DISCRETE)
+	# if firstFrame.has("tweenEasing") or firstFrame.has("curve"):
+	# 	anim.value_track_set_update_mode(track_index, Animation.UPDATE_CONTINUOUS)
+	# else:
+	# 	anim.value_track_set_update_mode(track_index, Animation.UPDATE_DISCRETE)
 
 	return track_index;
 
@@ -39,16 +39,21 @@ func createAnimTrack(anim: Animation, path, firstFrame) -> int:
 func addAnimKey(anim: Animation, trackIdx: int, frameJson, time:float, key: Variant):
 	var keyIndex = anim.track_insert_key(trackIdx, time, key);
 	
-	if frameJson.has("tweenEasing") or !frameJson.has("curve"):
-		pass
-	elif frameJson.has("curve"):
-		if arrayEqual(frameJson.curve, [0.5,0,1,1]):
-			anim.track_set_key_transition(trackIdx, keyIndex, 3);
-		elif arrayEqual(frameJson.curve, [0,0,0.5,1]):
-			anim.track_set_key_transition(trackIdx, keyIndex, 0.4);
-		elif arrayEqual(frameJson.curve, [0.5,0,0.5,1]):
-			anim.track_set_key_transition(trackIdx, keyIndex, -3);
+	if !frameJson.has("tweenEasing"):  
+		if frameJson.has("curve"): 
+			if arrayEqual(frameJson.curve, [0.5,0,1,1]):
+				anim.track_set_key_transition(trackIdx, keyIndex, 3);
+			elif arrayEqual(frameJson.curve, [0,0,0.5,1]):
+				anim.track_set_key_transition(trackIdx, keyIndex, 0.4);
+			elif arrayEqual(frameJson.curve, [0.5,0,0.5,1]):
+				anim.track_set_key_transition(trackIdx, keyIndex, -3);
+		else: #no transition
+			anim.track_set_key_transition(trackIdx, keyIndex, 1000000);
 
+func resetLastKeyTransition(anim:Animation, trackIdx: int):
+	var keyCount = anim.track_get_key_count(trackIdx);
+	if keyCount > 0:
+		anim.track_set_key_transition(trackIdx, keyCount-1, 1);
 
 func arrayEqual(a: Array, b: Array):
 	if a.size() != b.size():
@@ -556,7 +561,7 @@ func dbimport(val):
 
 						bone_position = bone_ref.position
 						path = String(skeleton.get_path_to(bone_ref))+":position"
-						var track_pos_index = createAnimTrack(animation, path,bone.translateFrame[0]);
+						var track_id = createAnimTrack(animation, path,bone.translateFrame[0]);
 
 						for frame in bone.translateFrame:
 
@@ -565,11 +570,12 @@ func dbimport(val):
 								newPos.x+=frame.x
 							if  frame.has("y"):
 								newPos.y+=frame.y
-							addAnimKey(animation, track_pos_index, frame, write_head, newPos);
+							addAnimKey(animation, track_id, frame, write_head, newPos);
 							if frame.has("duration"):
 								write_head+=frame.duration*framerate
 							else:
 								write_head+=framerate
+						resetLastKeyTransition(animation,track_id);
 
 					if bone.has("rotateFrame"):
 						var write_head=0;
@@ -588,7 +594,7 @@ func dbimport(val):
 								bone_rot = skeleton.find_child("[RE]"+bone.name).rotation_degrees
 								path = String(skeleton.get_path_to(skeleton.find_child("[RE]"+bone.name)))+":rotation"
 
-						var track_index = createAnimTrack(animation, path,bone.rotateFrame[0]);
+						var track_id = createAnimTrack(animation, path,bone.rotateFrame[0]);
 
 						var offset = bone_rot;
 
@@ -606,12 +612,14 @@ func dbimport(val):
 								newRot += 360
 
 							offset = newRot;
-							addAnimKey(animation, track_index, bone.rotateFrame[f], write_head, newRot * PI /180);
+							addAnimKey(animation, track_id, bone.rotateFrame[f], write_head, newRot * PI /180);
 
 							if  bone.rotateFrame[f].has("duration"):
 								write_head+=bone.rotateFrame[f].duration*framerate
 							else:
 								write_head+= framerate
+
+						resetLastKeyTransition(animation,track_id);
 
 					if bone.has("scaleFrame"):
 
@@ -644,6 +652,7 @@ func dbimport(val):
 							if d==null:
 								d = 1
 							write_head+=d*framerate
+						resetLastKeyTransition(animation,track_id);
 
 			if an.has("ffd"):
 				for ffdi in an.ffd.size():
@@ -746,6 +755,7 @@ func dbimport(val):
 									value.b = frame.value.bM/100
 							addAnimKey(animation, track, frame, write_head, value);
 							write_head+=frame.duration*framerate
+						resetLastKeyTransition(animation,track);						
 
 					if sl.has("displayFrame"):
 						var write_head=0;
